@@ -3,7 +3,7 @@
 
 pkgname=eclim-git
 pkgver=2.4.0_191_gba69e71
-pkgrel=1
+pkgrel=2
 pkgdesc="Brings Eclipse functionality to Vim"
 url="http://eclim.org/"
 license=('GPL3')
@@ -17,8 +17,10 @@ optdepends=('eclipse-pdt: Eclipse PHP Development Tools support'
             'eclipse-wtp: Eclipse Web Developer Tools support')
 conflicts=('eclim')
 install=$pkgname.install
-source=("$pkgname::git+https://github.com/ervandew/eclim.git")
-sha256sums=('SKIP')
+source=("$pkgname::git+https://github.com/ervandew/eclim.git"
+        systemd_eclimd.service)
+sha256sums=('SKIP'
+            '0d234125db21ace7cc1c0031c95bfc40d9093a6442bf3abeabd7b816371a8b14')
 
 pkgver() {
   cd "$srcdir/$pkgname"
@@ -102,4 +104,6 @@ package() {
   for i in $(find $pkgdir -regex ".*bat\|.*cmd\|.*exe"); do  rm -f $i ; done
 
   rm $pkgdir/usr/share/eclipse/plugins/org.eclim_*/nailgun/config.status
+
+  install -D -m 644 ${srcdir}/systemd_eclimd.service ${pkgdir}/usr/lib/systemd/user/eclimd.service
 }
