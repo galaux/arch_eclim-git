@@ -1,7 +1,8 @@
 # Maintainer: Andrea Fagiani <andfagiani_at_gmail_dot_com>
+# Contributor: Guillaume ALAUX <guillaume at alaux dot net>
 
-pkgname=eclim
-pkgver=2.4.0
+pkgname=eclim-git
+pkgver=2.4.0_191_gba69e71
 pkgrel=1
 pkgdesc="Brings Eclipse functionality to Vim"
 url="http://eclim.org/"
@@ -14,13 +15,20 @@ optdepends=('eclipse-pdt: Eclipse PHP Development Tools support'
             'eclipse-dltk-core: Eclipse Dynamic Languagues Toolkit support'
             'eclipse-dltk-ruby: Eclipse Ruby support'
             'eclipse-wtp: Eclipse Web Developer Tools support')
-conflicts=('eclim-git')
+conflicts=('eclim')
 install=$pkgname.install
-source=("http://downloads.sourceforge.net/project/$pkgname/$pkgname/$pkgver/${pkgname}_$pkgver.tar.gz")
-md5sums=('51a3bd0342b360271deb6e5e64a8bbec')
+source=("$pkgname::git+https://github.com/ervandew/eclim.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/$pkgname"
+  git describe | tr '-' '_'
+}
 
 prepare() {
-  cd $srcdir/${pkgname}_$pkgver
+  cd "$srcdir/$pkgname"
+
+  git submodule update --init --recursive
 
   # fix build, thanks to mikezackles
   sed -e "s/'sphinx-build'/'sphinx-build2'/g" \
@@ -35,7 +43,7 @@ prepare() {
 }
 
 build() {
-  cd $srcdir/${pkgname}_$pkgver
+  cd "$srcdir/$pkgname"
 
   # recompiling nailgun to make sure the executable is compliant with our architecture
   cd org.eclim/nailgun
@@ -44,22 +52,26 @@ build() {
 
   cd ../..
 
+  mkdir -p ${srcdir}/build
   ant -Declipse.home=/usr/share/eclipse \
+      -Declipse.dest=${srcdir}/build \
       -Dvim.files=/usr/share/vim/vimfiles \
       build
 }
 
 package() {
-  cd $srcdir/${pkgname}_$pkgver
+  cd "$srcdir/$pkgname"
 
   mkdir -p $pkgdir/usr/share/eclipse
   mkdir -p $pkgdir/usr/share/vim/vimfiles
 
   ant -Declipse.home=/usr/share/eclipse \
+      -Declipse.dest=${srcdir}/build \
       -Dvim.files=$pkgdir/usr/share/vim/vimfiles \
       docs vimdocs
 
   ant -Declipse.home=$pkgdir/usr/share/eclipse \
+      -Declipse.dest=${srcdir}/build \
       -Dvim.files=$pkgdir/usr/share/vim/vimfiles \
       deploy
 
@@ -67,11 +79,21 @@ package() {
   mkdir -p $pkgdir/usr/share/doc/
   cp -r build/doc/site $pkgdir/usr/share/doc/eclim
 
+  cp -r ${srcdir}/build/features ${srcdir}/build/plugins \
+    ${pkgdir}/usr/share/eclipse/
+
   # fix eclim paths
   sed -e "s|$pkgdir||g" \
     -i $pkgdir/usr/share/vim/vimfiles/eclim/plugin/eclim.vim \
-    -i $pkgdir/usr/share/eclipse/plugins/org.eclim_$pkgver/bin/eclimd \
-    -i $pkgdir/usr/share/eclipse/plugins/org.eclim_$pkgver/plugin.properties
+    -i $pkgdir/usr/share/eclipse/plugins/org.eclim_*/bin/eclimd \
+    -i $pkgdir/usr/share/eclipse/plugins/org.eclim_*/plugin.properties
+
+  pushd $pkgdir/usr/share/eclipse/
+    unlink $pkgdir/usr/share/eclipse/eclimd
+    ln -s $(find . -type f -path *bin/eclimd -executable) eclimd
+    unlink $pkgdir/usr/share/eclipse/eclim
+    ln -s $(find . -type f -path *bin/eclim -executable) eclim
+  popd
 
   # delete doctrees
   rm -fr $pkgdir/usr/share/doc/eclim/.doctrees
@@ -79,5 +101,5 @@ package() {
   # delete Windows stuff
   for i in $(find $pkgdir -regex ".*bat\|.*cmd\|.*exe"); do  rm -f $i ; done
 
-  rm $pkgdir/usr/share/eclipse/plugins/org.eclim_${pkgver}/nailgun/config.status
+  rm $pkgdir/usr/share/eclipse/plugins/org.eclim_*/nailgun/config.status
 }
