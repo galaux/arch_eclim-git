@@ -17,7 +17,8 @@ optdepends=('eclipse-pdt: Eclipse PHP Development Tools support'
             'eclipse-wtp: Eclipse Web Developer Tools support')
 conflicts=('eclim')
 install=$pkgname.install
-source=("$pkgname::git+https://github.com/ervandew/eclim.git"
+_authorgit=https://github.com/ervandew
+source=("$pkgname::git+$_authorgit/eclim.git"
         systemd_eclimd.service)
 sha256sums=('SKIP'
             '0d234125db21ace7cc1c0031c95bfc40d9093a6442bf3abeabd7b816371a8b14')
@@ -30,7 +31,9 @@ pkgver() {
 prepare() {
   cd "$srcdir/$pkgname"
 
-  git submodule update --init --recursive
+  sed -i 's|git@github.com:|https://github.com/|' .gitmodules
+  git remote set-url origin $_authorgit/sphinx-bootstrap-theme.git
+  git submodule update --init
 
   # fix build, thanks to mikezackles
   sed -e "s/'sphinx-build'/'sphinx-build2'/g" \
