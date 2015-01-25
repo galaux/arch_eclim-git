@@ -4,12 +4,5 @@ After=graphical.target
 
 [Service]
 Environment=DISPLAY=:0
-ExecStart=/usr/share/eclipse/eclimd
-[Unit]
-Description=Eclim
-After=graphical.target
-
-[Service]
-Environment=DISPLAY=:0
 Environment=ECLIMD_OPTS=-Xmx1024m
 ExecStart=/usr/share/eclipse/eclimd

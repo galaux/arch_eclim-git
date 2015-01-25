@@ -21,7 +21,7 @@ _authorgit=https://github.com/ervandew
 source=("${pkgname}::git+${_authorgit}/eclim.git"
         systemd_eclimd.service)
 sha256sums=('SKIP'
-            'eed00c20b596d9ede3d1417826ce3c8477116f029d80e985ec6d3df868008e0b')
+            'cf6a7fa27097d53891e5cf78bfd97acb86670aa3ddc16c01c13eecdf012dd32e')
 
 pkgver() {
   cd "${srcdir}/${pkgname}"
