@@ -1,13 +1,13 @@
-# Maintainer: Andrea Fagiani <andfagiani_at_gmail_dot_com>
-# Contributor: Guillaume ALAUX <guillaume at alaux dot net>
+# Maintainer: Guillaume ALAUX <guillaume at alaux dot net>
+# Contributor: Andrea Fagiani <andfagiani_at_gmail_dot_com>
 
 pkgname=eclim-git
-pkgver=2.4.0_191_gba69e71
-pkgrel=2
-pkgdesc="Brings Eclipse functionality to Vim"
-url="http://eclim.org/"
+pkgver=2.4.1.r0.g1de73d8
+pkgrel=1
+pkgdesc='Provides the ability to integrate Eclipse code editing features into your favorite editor'
+url='http://eclim.org/'
 license=('GPL3')
-arch=(i686 x86_64)
+arch=('i686' 'x86_64')
 depends=('vim' 'eclipse')
 makedepends=('apache-ant' 'python2-sphinx')
 optdepends=('eclipse-pdt: Eclipse PHP Development Tools support'
@@ -16,23 +16,25 @@ optdepends=('eclipse-pdt: Eclipse PHP Development Tools support'
             'eclipse-dltk-ruby: Eclipse Ruby support'
             'eclipse-wtp: Eclipse Web Developer Tools support')
 conflicts=('eclim')
-install=$pkgname.install
+install=${pkgname}.install
 _authorgit=https://github.com/ervandew
-source=("$pkgname::git+$_authorgit/eclim.git"
+source=("${pkgname}::git+${_authorgit}/eclim.git"
         systemd_eclimd.service)
 sha256sums=('SKIP'
-            '0d234125db21ace7cc1c0031c95bfc40d9093a6442bf3abeabd7b816371a8b14')
+            'eed00c20b596d9ede3d1417826ce3c8477116f029d80e985ec6d3df868008e0b')
 
 pkgver() {
-  cd "$srcdir/$pkgname"
-  git describe | tr '-' '_'
+  cd "${srcdir}/${pkgname}"
+  ( set -o pipefail
+    git describe --long --tags 2>/dev/null | sed 's/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  )
 }
 
 prepare() {
-  cd "$srcdir/$pkgname"
+  cd "${srcdir}/${pkgname}"
 
   sed -i 's|git@github.com:|https://github.com/|' .gitmodules
-  git remote set-url origin $_authorgit/sphinx-bootstrap-theme.git
   git submodule update --init
 
   # fix build, thanks to mikezackles
@@ -40,73 +42,77 @@ prepare() {
     -e 's|${user.home}/\.|${vim.files}/|g' \
     -e "s|File(getVariable('eclipse')|File('/usr/share/eclipse/'|g" \
     -i ant/build.gant
-
-  # Get the ANT_HOME environment variable
-  source /etc/profile.d/apache-ant.sh
-
-  chmod +x org.eclim/nailgun/configure bin/sphinx
 }
 
+getEclipseUserHome() {
+  _eclipse_ver=$(cat /usr/share/eclipse/.eclipseproduct \
+    | grep 'version=' \
+    | sed -r 's/^version=([0-9\.]+)$/\1/')
+  find ~/.eclipse -mindepth 1 -maxdepth 1 -type d -name "org.eclipse.platform_${_eclipse_ver}*" | head -1
+}
+_eclipse_user_home=$(getEclipseUserHome)
+_ant_opts=''
+if [ "x${_eclipse_user_home}" != "x" ]; then
+  _ant_opts="-Declipse.local=${_eclipse_user_home}"
+fi
+
 build() {
-  cd "$srcdir/$pkgname"
+  cd "${srcdir}/${pkgname}"
 
   # recompiling nailgun to make sure the executable is compliant with our architecture
-  cd org.eclim/nailgun
+  pushd org.eclim/nailgun
   ./configure
   make
 
-  cd ../..
+  popd
 
-  mkdir -p ${srcdir}/build
   ant -Declipse.home=/usr/share/eclipse \
-      -Declipse.dest=${srcdir}/build \
-      -Dvim.files=/usr/share/vim/vimfiles \
+      -Declipse.local=$(getEclipseUserHome) \
       build
 }
 
 package() {
-  cd "$srcdir/$pkgname"
-
-  mkdir -p $pkgdir/usr/share/eclipse
-  mkdir -p $pkgdir/usr/share/vim/vimfiles
+  cd "${srcdir}/${pkgname}"
 
   ant -Declipse.home=/usr/share/eclipse \
-      -Declipse.dest=${srcdir}/build \
-      -Dvim.files=$pkgdir/usr/share/vim/vimfiles \
-      docs vimdocs
+      -Declipse.local=$(getEclipseUserHome) \
+      docs
+  mkdir -p ${pkgdir}/usr/share/doc
+  cp -r build/doc/site ${pkgdir}/usr/share/doc/eclim
 
-  ant -Declipse.home=$pkgdir/usr/share/eclipse \
-      -Declipse.dest=${srcdir}/build \
-      -Dvim.files=$pkgdir/usr/share/vim/vimfiles \
+  mkdir -p ${pkgdir}/usr/share/vim/vimfiles/eclim/doc
+  ant -Declipse.home=/usr/share/eclipse \
+      -Declipse.local=$(getEclipseUserHome) \
+      -Dvim.files=${pkgdir}/usr/share/vim/vimfiles \
+      vimdocs
+
+  mkdir -p ${pkgdir}/usr/share/eclipse
+  mkdir -p ${pkgdir}/usr/share/vim/vimfiles
+  ant -Declipse.home=${pkgdir}/usr/share/eclipse \
+      -Declipse.local=$(getEclipseUserHome) \
+      -Declipse.dest=${pkgdir}/usr/share/eclipse \
+      -Dvim.files=${pkgdir}/usr/share/vim/vimfiles \
       deploy
 
-  # copy eclim docs
-  mkdir -p $pkgdir/usr/share/doc/
-  cp -r build/doc/site $pkgdir/usr/share/doc/eclim
-
-  cp -r ${srcdir}/build/features ${srcdir}/build/plugins \
-    ${pkgdir}/usr/share/eclipse/
-
+  # TODO DO we still need these?
   # fix eclim paths
-  sed -e "s|$pkgdir||g" \
-    -i $pkgdir/usr/share/vim/vimfiles/eclim/plugin/eclim.vim \
-    -i $pkgdir/usr/share/eclipse/plugins/org.eclim_*/bin/eclimd \
-    -i $pkgdir/usr/share/eclipse/plugins/org.eclim_*/plugin.properties
+  sed -e "s|${pkgdir}||g" \
+    -i ${pkgdir}/usr/share/vim/vimfiles/eclim/plugin/eclim.vim \
+    -i ${pkgdir}/usr/share/eclipse/plugins/org.eclim_*/bin/eclimd \
+    -i ${pkgdir}/usr/share/eclipse/plugins/org.eclim_*/plugin.properties
 
-  pushd $pkgdir/usr/share/eclipse/
-    unlink $pkgdir/usr/share/eclipse/eclimd
+  pushd ${pkgdir}/usr/share/eclipse/
     ln -s $(find . -type f -path *bin/eclimd -executable) eclimd
-    unlink $pkgdir/usr/share/eclipse/eclim
     ln -s $(find . -type f -path *bin/eclim -executable) eclim
   popd
 
   # delete doctrees
-  rm -fr $pkgdir/usr/share/doc/eclim/.doctrees
+  rm -fr ${pkgdir}/usr/share/doc/eclim/.doctrees
 
   # delete Windows stuff
-  for i in $(find $pkgdir -regex ".*bat\|.*cmd\|.*exe"); do  rm -f $i ; done
+  for i in $(find ${pkgdir} -regex ".*bat\|.*cmd\|.*exe"); do  rm -f $i ; done
 
-  rm $pkgdir/usr/share/eclipse/plugins/org.eclim_*/nailgun/config.status
+  rm ${pkgdir}/usr/share/eclipse/plugins/org.eclim_*/nailgun/config.status
 
   install -D -m 644 ${srcdir}/systemd_eclimd.service ${pkgdir}/usr/lib/systemd/user/eclimd.service
 }
