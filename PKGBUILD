@@ -2,7 +2,7 @@
 # Contributor: Andrea Fagiani <andfagiani_at_gmail_dot_com>
 
 pkgname=eclim-git
-pkgver=2.4.1.r0.g1de73d8
+pkgver=2.4.1.r3.ge91dcb4
 pkgrel=1
 pkgdesc='Provides the ability to integrate Eclipse code editing features into your favorite editor'
 url='http://eclim.org/'
@@ -51,9 +51,12 @@ getEclipseUserHome() {
   find ~/.eclipse -mindepth 1 -maxdepth 1 -type d -name "org.eclipse.platform_${_eclipse_ver}*" | head -1
 }
 _eclipse_user_home=$(getEclipseUserHome)
-_ant_opts=''
+_ant_opts_eclipse_user_home=''
 if [ "x${_eclipse_user_home}" != "x" ]; then
-  _ant_opts="-Declipse.local=${_eclipse_user_home}"
+  _ant_opts_eclipse_user_home="-Declipse.local=${_eclipse_user_home}"
+  echo "Eclipse local home found: ${_eclipse_user_home}"
+else
+  echo "Could not find Eclipse local home"
 fi
 
 build() {
@@ -66,51 +69,55 @@ build() {
 
   popd
 
+  _build_dir=${srcdir}/build
+  mkdir -p ${_build_dir}
+
   ant -Declipse.home=/usr/share/eclipse \
-      -Declipse.local=$(getEclipseUserHome) \
+      ${_ant_opts_eclipse_user_home} \
+      -Declipse.dest=${_build_dir} \
+      clean \
       build
 }
 
 package() {
   cd "${srcdir}/${pkgname}"
 
+  _build_dir=${srcdir}/build
+
   ant -Declipse.home=/usr/share/eclipse \
-      -Declipse.local=$(getEclipseUserHome) \
+      ${_ant_opts_eclipse_user_home} \
+      -Declipse.dest=${_build_dir} \
       docs
+
   mkdir -p ${pkgdir}/usr/share/doc
   cp -r build/doc/site ${pkgdir}/usr/share/doc/eclim
 
   mkdir -p ${pkgdir}/usr/share/vim/vimfiles/eclim/doc
   ant -Declipse.home=/usr/share/eclipse \
-      -Declipse.local=$(getEclipseUserHome) \
+      ${_ant_opts_eclipse_user_home} \
       -Dvim.files=${pkgdir}/usr/share/vim/vimfiles \
+      -Declipse.dest=${_build_dir} \
       vimdocs
 
   mkdir -p ${pkgdir}/usr/share/eclipse
   mkdir -p ${pkgdir}/usr/share/vim/vimfiles
   ant -Declipse.home=${pkgdir}/usr/share/eclipse \
-      -Declipse.local=$(getEclipseUserHome) \
       -Declipse.dest=${pkgdir}/usr/share/eclipse \
       -Dvim.files=${pkgdir}/usr/share/vim/vimfiles \
       deploy
 
-  # TODO DO we still need these?
   # fix eclim paths
   sed -e "s|${pkgdir}||g" \
-    -i ${pkgdir}/usr/share/vim/vimfiles/eclim/plugin/eclim.vim \
     -i ${pkgdir}/usr/share/eclipse/plugins/org.eclim_*/bin/eclimd \
     -i ${pkgdir}/usr/share/eclipse/plugins/org.eclim_*/plugin.properties
 
-  pushd ${pkgdir}/usr/share/eclipse/
-    ln -s $(find . -type f -path *bin/eclimd -executable) eclimd
-    ln -s $(find . -type f -path *bin/eclim -executable) eclim
-  popd
+  mkdir ${pkgdir}/usr/bin
+  for s in eclim eclimd; do
+    ln -s /usr/share/eclipse/${s} ${pkgdir}/usr/bin/${s}
+  done
 
   # delete doctrees
   rm -fr ${pkgdir}/usr/share/doc/eclim/.doctrees
-
-  # delete Windows stuff
-  for i in $(find ${pkgdir} -regex ".*bat\|.*cmd\|.*exe"); do  rm -f $i ; done
 
   rm ${pkgdir}/usr/share/eclipse/plugins/org.eclim_*/nailgun/config.status
 
